@@ -286,7 +286,7 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize LLM (OpenRouter with OpenAI-compatible API)
-	modelName := getEnvWithDefault("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+	modelName := getEnvWithDefault("OPENROUTER_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free")
 	var err error
 	llmClient, err = openai.New(
 		openai.WithToken(openRouterKey),
@@ -299,6 +299,7 @@ func main() {
 
 	// Initialize embeddings with OpenAI directly (for embeddings only)
 	// Note: OpenRouter may not support embeddings, so we use OpenAI directly with the HF key as fallback
+	// sentence-transformers/all-MiniLM-L6-v2
 	var embedder embeddings.Embedder
 	if hfAPIKey != "" {
 		// Try to use OpenAI embeddings with a separate key
