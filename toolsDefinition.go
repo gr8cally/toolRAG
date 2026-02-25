@@ -45,7 +45,7 @@ func convertCurrency(amount float64, from, to string) map[string]interface{} {
 // Tool Definitions
 // ------------------
 
-var tools = []*genai.Tool{
+var genAiTools = []*genai.Tool{
 	{
 		FunctionDeclarations: []*genai.FunctionDeclaration{
 			{
