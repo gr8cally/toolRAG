@@ -126,6 +126,19 @@ var (
 	llmClient       llms.Model
 )
 
+type Config struct {
+	HFAPIKey       string // HF_API_KEY (required)
+	EmbedModelName string // EMBED_MODEL_NAME
+	GeminiAPIKey   string // GEMINI_API_KEY
+	LLMModelName   string // LLM_MODEL_NAME
+	ChromaDBHost   string // CHROMA_DB_HOST
+	RAGDataDir     string // RAG_DATA_DIR
+	ChunkLength    int    // CHUNK_LENGTH
+	Port           int    // PORT
+}
+
+var currentConfig Config
+
 // ------------------
 // RAG Functions
 // ------------------
@@ -272,6 +285,18 @@ func main() {
 	}
 	userPrompt := os.Args[1]
 
+	// init chroma client
+	err := initChroma("currentConfig.ChromaDBHost")
+	if err != nil {
+		log.Fatalf("failed to init chroma: %v", err)
+		return
+	}
+	defer func() {
+		if err := chromaClient.Close(); err != nil {
+			log.Printf("Error closing Chroma client: %v", err)
+		}
+	}()
+
 	// Get API keys
 	openRouterKey := os.Getenv("OPENROUTER_API_KEY")
 	if openRouterKey == "" {
@@ -287,7 +312,6 @@ func main() {
 
 	// Initialize LLM (OpenRouter with OpenAI-compatible API)
 	modelName := getEnvWithDefault("OPENROUTER_MODEL", "nvidia/nemotron-3-nano-30b-a3b:free")
-	var err error
 	llmClient, err = openai.New(
 		openai.WithToken(openRouterKey),
 		openai.WithModel(modelName),
