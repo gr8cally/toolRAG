@@ -3,6 +3,7 @@ module tool-hybrid-RAG-project
 go 1.25.1
 
 require (
+	github.com/amikos-tech/chroma-go v0.3.5
 	github.com/joho/godotenv v1.5.1
 	github.com/tmc/langchaingo v0.1.14
 	google.golang.org/genai v1.47.0

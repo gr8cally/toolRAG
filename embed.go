@@ -6,27 +6,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
-// embeddings.go
-// Go-only embeddings client for sentence-transformers/all-MiniLM-L6-v2 hosted online.
-// Supports Hugging Face Inference API or a generic TEI (/embed) endpoint, chosen via env.
+// Go-only embeddings client for sentence-transformers/all-MiniLM-L6-v2 hosted online,
+// using HuggingFace Inference API via HF_API_KEY (required by spec).
 //
 // Env:
-//   # Option 1: Hugging Face Inference API (default if TEI not set)
-//   HUGGINGFACE_API_TOKEN=hf_xxx
-//   HUGGINGFACE_MODEL=sentence-transformers/all-MiniLM-L6-v2
-//   HUGGINGFACE_POOLING=mean           # mean|max (default: mean)
-//   HUGGINGFACE_NORMALIZE=true         # true|false (default: true)
-//   HUGGINGFACE_WAIT_FOR_MODEL=true    # default: true
+//   HF_API_KEY=hf_xxx
+//   EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 //
-//   # Option 2: TEI (Text Embeddings Inference) or compatible /embed service
-//   TEI_URL=https://your-tei-hostname  # if set, TEI is used (POST {TEI_URL}/embed)
-//   TEI_API_TOKEN=optional_bearer_token
-//
-//   # Batching
-//   EMBEDDING_BATCH_SIZE=64            # default: 64
+// Optional:
+//   EMBEDDING_BATCH_SIZE=64
 
 type Chunk struct {
 	ID, Text string
@@ -41,9 +34,18 @@ func NewEmbedderFromEnv() (Embedder, error) {
 	if currentConfig.HFAPIKey == "" {
 		return nil, fmt.Errorf("missing HF_API_KEY in config")
 	}
+
 	model := currentConfig.EmbedModelName
 	if model == "" {
 		model = "sentence-transformers/all-MiniLM-L6-v2"
+	}
+
+	batch := 64
+	if v := os.Getenv("EMBEDDING_BATCH_SIZE"); v != "" {
+		// best-effort parse
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			batch = n
+		}
 	}
 
 	return &hfEmbedder{
@@ -53,7 +55,7 @@ func NewEmbedderFromEnv() (Embedder, error) {
 		pooling:   "mean",
 		normalize: true,
 		wait:      true,
-		batch:     64,
+		batch:     batch,
 	}, nil
 }
 

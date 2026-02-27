@@ -18,8 +18,9 @@ A LangChain-based AI agent with RAG (Retrieval Augmented Generation) capabilitie
 ## Prerequisites
 
 - Go 1.25.1 or higher
+- ChromaDB running externally (default: http://localhost:8000)
 - OpenRouter API key ([Get one here](https://openrouter.ai/))
-- (Optional) HuggingFace API key for embeddings
+- HuggingFace API key for embeddings (required)
 
 ## Installation
 
@@ -75,10 +76,13 @@ Then query it:
 See `.env-example` for all available environment variables:
 
 - `OPENROUTER_API_KEY` (required) - Your OpenRouter API key
-- `HF_API_KEY` (optional) - Your HuggingFace API key for embeddings
-- `OPENROUTER_MODEL` (optional) - Model to use (default: anthropic/claude-3.5-sonnet)
+- `HF_API_KEY` (required) - Your HuggingFace API key for embeddings
+- `OPENROUTER_MODEL` (optional) - Model to use (default: nvidia/nemotron-3-nano-30b-a3b:free)
 - `EMBEDDING_MODEL` (optional) - Embedding model (default: sentence-transformers/all-MiniLM-L6-v2)
-- `VECTOR_STORE_PATH` (optional) - Path to store vectors (default: ./vectorstore)
+- `CHROMA_DB_HOST` (optional) - Chroma base URL (default: http://localhost:8000)
+- `RAG_DATA_DIR` (optional) - Folder to ingest (default: ./data)
+- `CHUNK_LENGTH` (optional) - Chunk size for ingestion (default: 800)
+- `EMBEDDING_BATCH_SIZE` (optional) - Embedding batch size (default: 64)
 
 ## Output
 
