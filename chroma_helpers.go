@@ -21,14 +21,23 @@ func chromaUpsert(ctx context.Context, c chroma.Collection, id string, doc strin
 		return fmt.Errorf("nil embedding")
 	}
 
-	emb := embeddings.Embedding(embeddingVec)
+	metas := make([]chroma.DocumentMetadata, 0, len(metadata))
+	for k, v := range metadata {
+		valString := fmt.Sprintf("%v", v)
 
-	_, err := c.Upsert(
+		metas = append(metas, chroma.NewDocumentMetadata(
+			chroma.NewStringAttribute(k, valString),
+		))
+	}
+
+	emb := embeddings.NewEmbeddingFromFloat32(embeddingVec)
+
+	err := c.Upsert(
 		ctx,
-		[]string{id},
-		[]embeddings.Embedding{emb},
-		[]map[string]interface{}{metadata},
-		[]string{doc},
+		chroma.WithIDs(chroma.DocumentID(id)),
+		chroma.WithEmbeddings([]embeddings.Embedding{emb}...),
+		chroma.WithMetadatas(metas...),
+		chroma.WithTexts([]string{doc}...),
 	)
 	return err
 }
@@ -41,8 +50,12 @@ func chromaQuery(ctx context.Context, c chroma.Collection, queryEmbedding []floa
 		k = 3
 	}
 
-	q := embeddings.Embedding(queryEmbedding)
-	res, err := c.Query(ctx, []embeddings.Embedding{q}, k, nil, nil, nil)
+	q := embeddings.NewEmbeddingFromFloat32(queryEmbedding)
+	res, err := c.Query(
+		ctx,
+		chroma.WithQueryEmbeddings([]embeddings.Embedding{q}...),
+		chroma.WithNResults(k),
+		chroma.WithIncludeQuery(chroma.IncludeDocuments, chroma.IncludeMetadatas))
 	if err != nil {
 		return nil, nil, nil, err
 	}

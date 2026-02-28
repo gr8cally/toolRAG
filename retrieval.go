@@ -124,12 +124,12 @@ func vectorRetrieve(ctx context.Context, c chroma.Collection, query string, k in
 	if c == nil {
 		return nil, fmt.Errorf("collection is nil")
 	}
-	if hfEmbedder == nil {
+	if hfEmbedderConcrete == nil {
 		return nil, fmt.Errorf("HF embedder not initialized")
 	}
 
 	qID := stableID("q", query)
-	vecs, err := hfEmbedder.Embed(ctx, []Chunk{{ID: qID, Text: query}})
+	vecs, err := hfEmbedderConcrete.Embed(ctx, []Chunk{{ID: qID, Text: query}})
 	if err != nil {
 		return nil, err
 	}

@@ -16,7 +16,6 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
-	github.com/amikos-tech/chroma-go v0.3.5 // indirect
 	github.com/amikos-tech/pure-tokenizers v0.1.1 // indirect
 	github.com/creasty/defaults v1.8.0 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
@@ -53,7 +52,6 @@ require (
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/yalue/onnxruntime_go v1.22.0 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
