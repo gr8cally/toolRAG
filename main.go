@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/joho/godotenv"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
@@ -156,6 +157,36 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 			return nil
 		}
 
+		// Strategy 1: Check if document already exists in ChromaDB
+		// Check if any chunks from this file are already indexed
+		firstChunkID := stableID("rag", path, "0")
+		existingDocs, err := ragDocsCollection.Get(ctx,
+			chroma.WithIDs(chroma.DocumentID(firstChunkID)))
+
+		if err == nil && existingDocs.Count() > 0 {
+			// Document already indexed, load existing chunks for BM25 index
+			log.Printf("Document %s already indexed, loading from ChromaDB", filepath.Base(path))
+
+			// Get all chunks for this file to build BM25 index
+			allChunks, err := ragDocsCollection.Get(ctx,
+				chroma.WithWhere(chroma.EqString("source", path)))
+
+			if err == nil {
+				resultIDs := allChunks.GetIDs()
+				resultDocs := allChunks.GetDocuments()
+				for i := range resultIDs {
+					if i < len(resultDocs) {
+						corpus = append(corpus, BM25Doc{
+							ID:   string(resultIDs[i]),
+							Text: resultDocs[i].ContentString(),
+						})
+						documentChunks++
+					}
+				}
+			}
+			return nil
+		}
+
 		chunks := chunkText(text, chunkSize)
 		if len(chunks) == 0 {
 			return nil
@@ -167,7 +198,21 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 			embedInputs = append(embedInputs, Chunk{ID: id, Text: c})
 		}
 
-		vecs, err := hfEmbedderConcrete.Embed(ctx, embedInputs)
+		// Strategy 2: Use cached embeddings to avoid redundant API calls
+		modelName := currentConfig.EmbedModelName
+		if modelName == "" {
+			modelName = "sentence-transformers/all-MiniLM-L6-v2"
+		}
+
+		vecs, err := embedWithCache(
+			ctx,
+			hfEmbedderConcrete,
+			embedInputs,
+			filepath.Base(path),
+			text,
+			chunkSize,
+			modelName,
+		)
 		if err != nil {
 			return fmt.Errorf("embedding %s: %w", path, err)
 		}
