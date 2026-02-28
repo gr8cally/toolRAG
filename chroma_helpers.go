@@ -60,17 +60,50 @@ func chromaQuery(ctx context.Context, c chroma.Collection, queryEmbedding []floa
 		return nil, nil, nil, err
 	}
 
-	// chroma-go returns nested results (per query)
-	if len(res.IDs) == 0 {
+	// chroma-go v2 returns results with Get methods
+	idGroups := res.GetIDGroups()
+	if len(idGroups) == 0 {
 		return []string{}, []string{}, []map[string]interface{}{}, nil
 	}
 
-	ids = res.IDs[0]
-	if len(res.Documents) > 0 {
-		docs = res.Documents[0]
+	// Convert DocumentIDs to []string
+	idGroup := idGroups[0]
+	ids = make([]string, len(idGroup))
+
+	for i, id := range idGroup {
+		ids[i] = string(id)
 	}
-	if len(res.Metadatas) > 0 {
-		metas = res.Metadatas[0]
+
+	// Convert Documents to []string
+	docGroups := res.GetDocumentsGroups()
+	if len(docGroups) > 0 {
+		docGroup := docGroups[0]
+		docs = make([]string, len(docGroup))
+		for i, doc := range docGroup {
+			docs[i] = doc.ContentString()
+		}
+	}
+
+	// Convert DocumentMetadatas to []map[string]interface{}
+	metaGroups := res.GetMetadatasGroups()
+	if len(metaGroups) > 0 {
+		metaGroup := metaGroups[0]
+		metas = make([]map[string]interface{}, len(metaGroup))
+		for i, meta := range metaGroup {
+			// Convert DocumentMetadata interface to map
+			m := make(map[string]interface{})
+			// Try common keys that might be present
+			if val, ok := meta.GetRaw("source"); ok {
+				m["source"] = val
+			}
+			if val, ok := meta.GetRaw("timestamp"); ok {
+				m["timestamp"] = val
+			}
+			if val, ok := meta.GetRaw("type"); ok {
+				m["type"] = val
+			}
+			metas[i] = m
+		}
 	}
 	return ids, docs, metas, nil
 }
@@ -83,22 +116,32 @@ func chromaGetByIDs(ctx context.Context, c chroma.Collection, ids []string) ([]R
 		return []Retrieved{}, nil
 	}
 
-	getRes, err := c.Get(ctx, ids, nil, nil, nil)
+	// Convert []string to variadic DocumentID arguments
+	docIDs := make([]chroma.DocumentID, len(ids))
+	for i, id := range ids {
+		docIDs[i] = chroma.DocumentID(id)
+	}
+
+	getRes, err := c.Get(ctx, chroma.WithIDs(docIDs...))
 	if err != nil {
 		return nil, err
 	}
 
 	// `Get` returns flat arrays aligned by ID order provided.
-	out := make([]Retrieved, 0, len(getRes.IDs))
-	for i := range getRes.IDs {
+	resultIDs := getRes.GetIDs()
+	resultDocs := getRes.GetDocuments()
+	resultMetas := getRes.GetMetadatas()
+
+	out := make([]Retrieved, 0, len(resultIDs))
+	for i := range resultIDs {
 		r := Retrieved{
-			ID: getRes.IDs[i],
+			ID: string(resultIDs[i]), // Convert DocumentID to string
 		}
-		if i < len(getRes.Documents) {
-			r.Text = getRes.Documents[i]
+		if i < len(resultDocs) {
+			r.Text = resultDocs[i].ContentString() // Use ContentString() method
 		}
-		if i < len(getRes.Metadatas) {
-			if s, ok := getRes.Metadatas[i]["source"]; ok {
+		if i < len(resultMetas) {
+			if s, ok := resultMetas[i].GetRaw("source"); ok {
 				r.Source = fmt.Sprintf("%v", s)
 			}
 		}
