@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // ------------------
@@ -77,6 +78,42 @@ func (t InternalKnowledgeTool) Description() string {
 
 func (t InternalKnowledgeTool) Call(ctx context.Context, input string) (string, error) {
 	return queryInternalKnowledge(ctx, input)
+}
+
+func queryInternalKnowledge(ctx context.Context, query string) (string, error) {
+	if hfEmbedderConcrete == nil || ragDocsCollection == nil || conversationCollection == nil {
+		return "Internal knowledge base not initialized.", nil
+	}
+
+	// Hybrid retrieve from rag_docs and also vector-retrieve from conversation memory.
+	docResults, err := hybridRetrieve(ctx, ragDocsCollection, query, 4)
+	if err != nil {
+		return "", err
+	}
+	memResults, err := vectorRetrieve(ctx, conversationCollection, query, 3)
+	if err != nil {
+		return "", err
+	}
+
+	if len(docResults) == 0 && len(memResults) == 0 {
+		return "No relevant information found in internal knowledge base.", nil
+	}
+
+	var out []string
+	if len(docResults) > 0 {
+		out = append(out, "=== Relevant Documents (hybrid) ===")
+		for i, r := range docResults {
+			out = append(out, fmt.Sprintf("Doc %d (source: %s):\n%s", i+1, r.Source, r.Text))
+		}
+	}
+	if len(memResults) > 0 {
+		out = append(out, "=== Relevant Past Conversations (vector) ===")
+		for i, r := range memResults {
+			out = append(out, fmt.Sprintf("Memory %d:\n%s", i+1, r.Text))
+		}
+	}
+
+	return strings.Join(out, "\n\n"), nil
 }
 
 // Flight Schedule Tool
