@@ -146,3 +146,14 @@ Pick a model strong at Go + multi-file refactors:
 - DeepSeek R1 / V3
 
 When handing off, specify whether “full conversation history” means “all turns ever, chronological” or “last N remembered turns is acceptable”.
+
+----
+todo 
+
+sorting conversation history in loadRecentConversationHistory  chronological order by time
+in storeConversationHistory
+there is a timestamp in the metadata
+
+instead of sorting by `sort.Strings`
+
+vectorRetrieve only reads the source metadata

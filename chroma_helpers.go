@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
+	"time"
 
 	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
@@ -178,4 +180,27 @@ func loadRecentConversationHistory(ctx context.Context, k int) ([]string, error)
 	// Provide stable output ordering across runs.
 	sort.Strings(out)
 	return out, nil
+}
+
+func storeConversationHistory(ctx context.Context, userMsg, assistantMsg string) {
+	if conversationCollection == nil || hfEmbedderConcrete == nil {
+		return
+	}
+
+	conversation := fmt.Sprintf("User: %s\nAssistant: %s", userMsg, assistantMsg)
+	id := stableID("conv", time.Now().Format(time.RFC3339Nano), userMsg, assistantMsg)
+
+	vecs, err := hfEmbedderConcrete.Embed(ctx, []Chunk{{ID: id, Text: conversation}})
+	if err != nil {
+		log.Printf("Warning: Failed to embed conversation: %v", err)
+		return
+	}
+
+	meta := map[string]interface{}{
+		"type":      "conversation",
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
+	if err := chromaUpsert(ctx, conversationCollection, id, conversation, vecs[id], meta); err != nil {
+		log.Printf("Warning: Failed to store conversation: %v", err)
+	}
 }

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/joho/godotenv"
@@ -249,29 +248,6 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 	bm25Index = NewBM25Index(corpus)
 
 	return nil
-}
-
-func storeConversationHistory(ctx context.Context, userMsg, assistantMsg string) {
-	if conversationCollection == nil || hfEmbedderConcrete == nil {
-		return
-	}
-
-	conversation := fmt.Sprintf("User: %s\nAssistant: %s", userMsg, assistantMsg)
-	id := stableID("conv", time.Now().Format(time.RFC3339Nano), userMsg, assistantMsg)
-
-	vecs, err := hfEmbedderConcrete.Embed(ctx, []Chunk{{ID: id, Text: conversation}})
-	if err != nil {
-		log.Printf("Warning: Failed to embed conversation: %v", err)
-		return
-	}
-
-	meta := map[string]interface{}{
-		"type":      "conversation",
-		"timestamp": time.Now().Format(time.RFC3339),
-	}
-	if err := chromaUpsert(ctx, conversationCollection, id, conversation, vecs[id], meta); err != nil {
-		log.Printf("Warning: Failed to store conversation: %v", err)
-	}
 }
 
 // ------------------
