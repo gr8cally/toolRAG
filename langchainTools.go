@@ -90,12 +90,8 @@ func queryInternalKnowledge(ctx context.Context, query string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	memResults, err := vectorRetrieve(ctx, conversationCollection, query, 3)
-	if err != nil {
-		return "", err
-	}
 
-	if len(docResults) == 0 && len(memResults) == 0 {
+	if len(docResults) == 0 {
 		return "No relevant information found in internal knowledge base.", nil
 	}
 
@@ -104,12 +100,6 @@ func queryInternalKnowledge(ctx context.Context, query string) (string, error) {
 		out = append(out, "=== Relevant Documents (hybrid) ===")
 		for i, r := range docResults {
 			out = append(out, fmt.Sprintf("Doc %d (source: %s):\n%s", i+1, r.Source, r.Text))
-		}
-	}
-	if len(memResults) > 0 {
-		out = append(out, "=== Relevant Past Conversations (vector) ===")
-		for i, r := range memResults {
-			out = append(out, fmt.Sprintf("Memory %d:\n%s", i+1, r.Text))
 		}
 	}
 
