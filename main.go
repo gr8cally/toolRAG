@@ -139,11 +139,38 @@ func main() {
 		InternalKnowledgeTool{ctx: ctx},
 	}
 
+	// System instructions for the agent
+	systemPrompt := `You are a helpful AI assistant with access to multiple specialized tools.
+
+AVAILABLE TOOLS:
+1. query_internal_knowledge - Search internal documents, policies, and previous conversations
+2. get_flight_schedule - Get flight information between cities
+3. get_hotel_schedule - Find hotel options in a city
+4. convert_currency - Convert between currencies
+
+CRITICAL INSTRUCTIONS:
+1. For questions about DOCUMENTS, FORMS, POLICIES, or PROCEDURES:
+   - ALWAYS use 'query_internal_knowledge' FIRST
+   - Do NOT answer from general knowledge if the info might be in stored documents
+   - Examples: "what boxes...", "what fields...", "application requirements", etc.
+
+2. For questions about TRAVEL:
+   - Use 'get_flight_schedule' for flight queries
+   - Use 'get_hotel_schedule' for accommodation queries
+   - Use 'convert_currency' for currency conversions
+
+3. Choose the RIGHT TOOL for each question based on what the user is asking about.
+
+4. If no tool is appropriate, use your general knowledge but state this clearly.
+
+5. Always formulate clear, specific queries/inputs when using tools.`
+
 	executor, err := agents.Initialize(
 		llmClient,
 		agentTools,
 		agents.ZeroShotReactDescription,
 		agents.WithMaxIterations(5),
+		agents.WithPromptPrefix(systemPrompt),
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize agent: %v", err)

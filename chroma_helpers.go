@@ -23,23 +23,28 @@ func chromaUpsert(ctx context.Context, c chroma.Collection, id string, doc strin
 		return fmt.Errorf("nil embedding")
 	}
 
-	metas := make([]chroma.DocumentMetadata, 0, len(metadata))
+	// Build a single DocumentMetadata with all attributes
+	// Each key-value pair becomes an attribute within the same metadata object
+	attrs := make([]*chroma.MetaAttribute, 0, len(metadata))
 	for k, v := range metadata {
+		// Convert all values to strings for simplicity
+		// ChromaDB also supports int, float, and bool, but string works universally
 		valString := fmt.Sprintf("%v", v)
-
-		metas = append(metas, chroma.NewDocumentMetadata(
-			chroma.NewStringAttribute(k, valString),
-		))
+		attrs = append(attrs, chroma.NewStringAttribute(k, valString))
 	}
 
+	// Create a single metadata object with all attributes
+	meta := chroma.NewDocumentMetadata(attrs...)
 	emb := embeddings.NewEmbeddingFromFloat32(embeddingVec)
 
+	// Upsert with 1 ID, 1 embedding, 1 metadata, 1 text
+	// All arrays must have the same length (1 in this case)
 	err := c.Upsert(
 		ctx,
 		chroma.WithIDs(chroma.DocumentID(id)),
-		chroma.WithEmbeddings([]embeddings.Embedding{emb}...),
-		chroma.WithMetadatas(metas...),
-		chroma.WithTexts([]string{doc}...),
+		chroma.WithEmbeddings(emb),
+		chroma.WithMetadatas(meta),
+		chroma.WithTexts(doc),
 	)
 	return err
 }

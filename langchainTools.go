@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // ------------------
@@ -73,7 +72,20 @@ func (t InternalKnowledgeTool) Name() string {
 }
 
 func (t InternalKnowledgeTool) Description() string {
-	return "Query the internal knowledge base for information from documents and previous conversations. Input should be a search query string."
+	return `IMPORTANT: Use this tool FIRST for ANY question that could be answered by documents, forms, policies, procedures, or previous conversations.
+
+This tool searches the internal knowledge base using hybrid search (semantic + keyword matching) to find the most relevant information.
+
+When to use:
+- Questions about forms, applications, or documents (e.g., "what boxes...", "what fields...", "what information...")
+- Questions about policies, procedures, or guidelines
+- Questions about specific requirements or instructions
+- Any factual question that might be in stored documents
+- When you're unsure - always check the knowledge base first!
+
+Do NOT answer from general knowledge if this tool might have the answer. Always search first.
+
+Input: A natural language search query (e.g., "boxes required on application form" or "DBS disclosure requirements")`
 }
 
 func (t InternalKnowledgeTool) Call(ctx context.Context, input string) (string, error) {
