@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
 )
@@ -181,9 +182,10 @@ func tokenize(s string) []string {
 // Retrieved represents a document/chunk retrieved from the vector store.
 // Contains both the content and metadata needed for display and ranking.
 type Retrieved struct {
-	ID     string // Unique chunk/document identifier
-	Text   string // Document content
-	Source string // Source file path (from metadata)
+	ID        string    // Unique chunk/document identifier
+	Text      string    // Document content
+	Source    string    // Source file path (from metadata)
+	Timestamp time.Time // Stored timestamp (from metadata), zero if absent
 }
 
 // vectorRetrieve performs semantic search using vector embeddings.

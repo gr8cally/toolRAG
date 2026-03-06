@@ -153,19 +153,61 @@ func chromaGetByIDs(ctx context.Context, c chroma.Collection, ids []string) ([]R
 	return out, nil
 }
 
+// chromaGetByFilter fetches all documents from c that match the given metadata key=value filter.
+// Timestamps in metadata are parsed and set on Retrieved.Timestamp.
+func chromaGetByFilter(ctx context.Context, c chroma.Collection, key, value string) ([]Retrieved, error) {
+	if c == nil {
+		return nil, fmt.Errorf("collection is nil")
+	}
+
+	res, err := c.Get(ctx,
+		chroma.WithWhere(chroma.EqString(key, value)),
+		chroma.WithInclude(chroma.IncludeDocuments, chroma.IncludeMetadatas),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resultIDs := res.GetIDs()
+	resultDocs := res.GetDocuments()
+	resultMetas := res.GetMetadatas()
+
+	out := make([]Retrieved, 0, len(resultIDs))
+	for i := range resultIDs {
+		r := Retrieved{ID: string(resultIDs[i])}
+		if i < len(resultDocs) {
+			r.Text = resultDocs[i].ContentString()
+		}
+		if i < len(resultMetas) {
+			if v, ok := resultMetas[i].GetRaw("timestamp"); ok {
+				if ts, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", v)); err == nil {
+					r.Timestamp = ts
+				}
+			}
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 func loadRecentConversationHistory(ctx context.Context, k int) ([]string, error) {
 	if conversationCollection == nil {
 		return []string{}, nil
 	}
-	if k <= 0 {
-		k = 20
-	}
 
-	// Pragmatic memory fetch: semantic query against a generic phrase.
-	// This keeps the system simple while ensuring stored conversation turns are retrievable later.
-	results, err := vectorRetrieve(ctx, conversationCollection, "conversation history", k)
+	results, err := chromaGetByFilter(ctx, conversationCollection, "type", "conversation")
 	if err != nil {
 		return nil, err
+	}
+
+	// Sort chronologically by stored timestamp.
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Timestamp.Before(results[j].Timestamp)
+	})
+
+	// Apply limit after sorting so we keep the most recent k turns.
+	if k > 0 && len(results) > k {
+		results = results[len(results)-k:]
 	}
 
 	out := make([]string, 0, len(results))
@@ -176,9 +218,6 @@ func loadRecentConversationHistory(ctx context.Context, k int) ([]string, error)
 		}
 		out = append(out, t)
 	}
-
-	// Provide stable output ordering across runs.
-	sort.Strings(out)
 	return out, nil
 }
 
