@@ -44,26 +44,25 @@ func convertCurrency(amount float64, from, to string) map[string]interface{} {
 }
 
 func queryInternalKnowledge(ctx context.Context, query string) (string, error) {
-	if hfEmbedderConcrete == nil || ragDocsCollection == nil || conversationCollection == nil {
-		return "Internal knowledge base not initialized.", nil
+	if hfEmbedderConcrete == nil || ragDocsCollection == nil {
+		return "NOT FOUND: internal knowledge base not initialized.", nil
 	}
 
-	// Hybrid retrieve from rag_docs and also vector-retrieve from conversation memory.
+	// Hybrid retrieve from the indexed internal document collection.
 	docResults, err := hybridRetrieve(ctx, ragDocsCollection, query, 4)
 	if err != nil {
 		return "", err
 	}
 
 	if len(docResults) == 0 {
-		return "No relevant information found in internal knowledge base.", nil
+		return "NOT FOUND: no relevant information found in internal knowledge base.", nil
 	}
 
 	var out []string
-	if len(docResults) > 0 {
-		out = append(out, "=== Relevant Documents (hybrid) ===")
-		for i, r := range docResults {
-			out = append(out, fmt.Sprintf("Doc %d (source: %s):\n%s", i+1, r.Source, r.Text))
-		}
+	out = append(out, "FOUND: relevant internal knowledge")
+	for i, r := range docResults {
+		out = append(out, fmt.Sprintf("Source %d: %s", i+1, r.Source))
+		out = append(out, fmt.Sprintf("Snippet %d: %s", i+1, compactSnippet(r.Text)))
 	}
 
 	return strings.Join(out, "\n\n"), nil

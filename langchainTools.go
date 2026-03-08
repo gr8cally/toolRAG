@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 // ------------------
@@ -18,19 +21,15 @@ func (t HotelScheduleTool) Name() string {
 }
 
 func (t HotelScheduleTool) Description() string {
-	return "Return hotel options in a city with nightly USD prices. Input should be a JSON object with 'city' field."
+	return "Return hotel options in a city with nightly USD prices. Input can be plain text like 'Nairobi' or JSON like {\"city\":\"Nairobi\"}."
 }
 
 func (t HotelScheduleTool) Call(ctx context.Context, input string) (string, error) {
-	var params struct {
-		City string `json:"city"`
+	city, err := parseHotelToolInput(input)
+	if err != nil {
+		return "", err
 	}
-
-	if err := json.Unmarshal([]byte(input), &params); err != nil {
-		return "", fmt.Errorf("invalid input format: %w", err)
-	}
-
-	result := getHotelSchedule(params.City)
+	result := getHotelSchedule(city)
 	output, _ := json.Marshal(result)
 	return string(output), nil
 }
@@ -43,21 +42,15 @@ func (t CurrencyConverterTool) Name() string {
 }
 
 func (t CurrencyConverterTool) Description() string {
-	return "Convert currency amount from one currency to another. Input should be a JSON object with 'amount', 'from', and 'to' fields."
+	return "Convert currency amount from one currency to another. Input can be plain text like '100 USD to NGN' or JSON like {\"amount\":100,\"from\":\"USD\",\"to\":\"NGN\"}."
 }
 
 func (t CurrencyConverterTool) Call(ctx context.Context, input string) (string, error) {
-	var params struct {
-		Amount float64 `json:"amount"`
-		From   string  `json:"from"`
-		To     string  `json:"to"`
+	amount, from, to, err := parseCurrencyToolInput(input)
+	if err != nil {
+		return "", err
 	}
-
-	if err := json.Unmarshal([]byte(input), &params); err != nil {
-		return "", fmt.Errorf("invalid input format: %w", err)
-	}
-
-	result := convertCurrency(params.Amount, params.From, params.To)
+	result := convertCurrency(amount, from, to)
 	output, _ := json.Marshal(result)
 	return string(output), nil
 }
@@ -100,20 +93,72 @@ func (t FlightScheduleTool) Name() string {
 }
 
 func (t FlightScheduleTool) Description() string {
-	return "Return a flight schedule option from origin to destination with duration and USD price. Input should be a JSON object with 'origin' and 'destination' fields."
+	return "Return a flight schedule option from origin to destination with duration and USD price. Input can be plain text like 'from Lagos to Nairobi' or JSON like {\"origin\":\"Lagos\",\"destination\":\"Nairobi\"}."
 }
 
 func (t FlightScheduleTool) Call(ctx context.Context, input string) (string, error) {
+	origin, destination, err := parseFlightToolInput(input)
+	if err != nil {
+		return "", err
+	}
+	result := getFlightSchedule(origin, destination)
+	output, _ := json.Marshal(result)
+	return string(output), nil
+}
+
+func parseHotelToolInput(input string) (string, error) {
+	var params struct {
+		City string `json:"city"`
+	}
+	if err := json.Unmarshal([]byte(input), &params); err == nil && strings.TrimSpace(params.City) != "" {
+		return strings.TrimSpace(params.City), nil
+	}
+
+	city := strings.TrimSpace(strings.Trim(input, `"'`))
+	if city == "" {
+		return "", fmt.Errorf("invalid hotel input: %q", input)
+	}
+	return city, nil
+}
+
+func parseCurrencyToolInput(input string) (float64, string, string, error) {
+	var params struct {
+		Amount float64 `json:"amount"`
+		From   string  `json:"from"`
+		To     string  `json:"to"`
+	}
+	if err := json.Unmarshal([]byte(input), &params); err == nil && params.Amount > 0 && params.From != "" && params.To != "" {
+		return params.Amount, strings.ToUpper(params.From), strings.ToUpper(params.To), nil
+	}
+
+	re := regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*([A-Z]{3})\s+(?:to|in)\s+([A-Z]{3})`)
+	matches := re.FindStringSubmatch(input)
+	if len(matches) != 4 {
+		return 0, "", "", fmt.Errorf("invalid currency input: %q", input)
+	}
+
+	amount, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0, "", "", fmt.Errorf("invalid currency amount: %w", err)
+	}
+
+	return amount, strings.ToUpper(matches[2]), strings.ToUpper(matches[3]), nil
+}
+
+func parseFlightToolInput(input string) (string, string, error) {
 	var params struct {
 		Origin      string `json:"origin"`
 		Destination string `json:"destination"`
 	}
-
-	if err := json.Unmarshal([]byte(input), &params); err != nil {
-		return "", fmt.Errorf("invalid input format: %w", err)
+	if err := json.Unmarshal([]byte(input), &params); err == nil && params.Origin != "" && params.Destination != "" {
+		return strings.TrimSpace(params.Origin), strings.TrimSpace(params.Destination), nil
 	}
 
-	result := getFlightSchedule(params.Origin, params.Destination)
-	output, _ := json.Marshal(result)
-	return string(output), nil
+	re := regexp.MustCompile(`(?i)(?:from\s+)?([A-Za-z .'-]+?)\s+(?:to|->)\s+([A-Za-z .'-]+)\s*$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(input))
+	if len(matches) != 3 {
+		return "", "", fmt.Errorf("invalid flight input: %q", input)
+	}
+
+	return strings.TrimSpace(matches[1]), strings.TrimSpace(matches[2]), nil
 }

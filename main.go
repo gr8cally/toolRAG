@@ -149,28 +149,38 @@ AVAILABLE TOOLS:
 4. convert_currency - Convert between currencies
 
 CRITICAL INSTRUCTIONS:
-1. For questions about DOCUMENTS, FORMS, POLICIES, or PROCEDURES:
-   - ALWAYS use 'query_internal_knowledge' FIRST
-   - Do NOT answer from general knowledge if the info might be in stored documents
-   - Examples: "what boxes...", "what fields...", "application requirements", etc.
+1. Never answer from general knowledge when a tool could be used.
+   - Use the available tools to gather facts before giving a final answer.
 
 2. For questions about TRAVEL:
    - Use 'get_flight_schedule' for flight queries
    - Use 'get_hotel_schedule' for accommodation queries
    - Use 'convert_currency' for currency conversions
 
-3. Choose the RIGHT TOOL for each question based on what the user is asking about.
+3. For questions about documents, forms, policies, procedures, requirements, instructions, or internal facts:
+   - Call 'query_internal_knowledge' first using the user's question or a close paraphrase.
+   - Base the final answer on the tool observation.
+   - If the tool returns NOT FOUND, say you could not find the answer in the internal knowledge base.
+   - Do not invent an answer.
 
-4. If no tool is appropriate, use your general knowledge but state this clearly.
+4. Choose the right tool for each question based on what the user is asking about.
 
-5. Always formulate clear, specific queries/inputs when using tools.`
+5. When answering from internal knowledge, quote the requirement accurately and mention the source file when available.`
+
+	// Add a parser error handler that tells the LLM how to fix its formatting.
+	peh := agents.NewParserErrorHandler(func(err string) string {
+		return "OUTPUT PARSE ERROR. You MUST respond using the MRKL format. " +
+			"When you are done, output EXACTLY 'Final Answer: <your answer>' (plain text, no markdown). " +
+			"Do NOT use '**Answer:**' or 'Answer:'. Error was: " + err
+	})
 
 	executor, err := agents.Initialize(
 		llmClient,
 		agentTools,
 		agents.ZeroShotReactDescription,
-		agents.WithMaxIterations(5),
+		agents.WithMaxIterations(6),
 		agents.WithPromptPrefix(systemPrompt),
+		agents.WithParserErrorHandler(peh),
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize agent: %v", err)
@@ -179,7 +189,7 @@ CRITICAL INSTRUCTIONS:
 	// Append current turn to the printed conversation log (conversation-only, not tool traces)
 	conversationLog = append(conversationLog, fmt.Sprintf("User: %s", userPrompt))
 
-	response, err := chains.Run(ctx, executor, userPrompt)
+	response, err := chains.Run(ctx, executor, userPrompt, chains.WithTemperature(0))
 	if err != nil {
 		log.Fatalf("Agent execution failed: %v", err)
 	}
