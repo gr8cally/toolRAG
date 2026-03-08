@@ -160,6 +160,7 @@ func (idx *BM25Index) Search(query string, k int) []string {
 // nonWord matches sequences of characters that are NOT letters or numbers.
 // Used to split text into word tokens for BM25 indexing.
 var nonWord = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+var edgeNonWord = regexp.MustCompile(`^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$`)
 
 // tokenize converts text into lowercase word tokens.
 // Steps:
@@ -170,9 +171,28 @@ var nonWord = regexp.MustCompile(`[^\p{L}\p{N}]+`)
 // Example: "Hello, World! 123" → ["hello", "world", "123"]
 func tokenize(s string) []string {
 	s = strings.ToLower(s)
-	s = nonWord.ReplaceAllString(s, " ")
-	parts := strings.Fields(s)
-	return parts
+	rawFields := strings.Fields(s)
+	if len(rawFields) == 0 {
+		return nil
+	}
+
+	out := make([]string, 0, len(rawFields)*2)
+	for _, field := range rawFields {
+		normalized := edgeNonWord.ReplaceAllString(field, "")
+		if normalized == "" {
+			continue
+		}
+
+		// Preserve full identifier-like tokens so values like
+		// "do-not-index-unique-12345" can be exact-matched.
+		if strings.ContainsAny(normalized, "-_") {
+			out = append(out, normalized)
+		}
+
+		parts := strings.Fields(nonWord.ReplaceAllString(normalized, " "))
+		out = append(out, parts...)
+	}
+	return out
 }
 
 // ------------------

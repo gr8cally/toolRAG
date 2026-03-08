@@ -41,7 +41,8 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 	}
 
 	var corpus []BM25Doc
-	documentChunks := 0
+	bm25Chunks := 0
+	upsertedChunks := 0
 
 	err := filepath.WalkDir(dataDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -62,45 +63,45 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 			return nil
 		}
 
-		// Strategy 1: Check if document already exists in ChromaDB
-		// Check if any chunks from this file are already indexed
-		firstChunkID := stableID("rag", path, "0")
-		existingDocs, err := ragDocsCollection.Get(ctx,
-			chroma.WithIDs(chroma.DocumentID(firstChunkID)))
-
-		if err == nil && existingDocs.Count() > 0 {
-			// Document already indexed, load existing chunks for BM25 index
-			log.Printf("Document %s already indexed, loading from ChromaDB", filepath.Base(path))
-
-			// Get all chunks for this file to build BM25 index
-			allChunks, err := ragDocsCollection.Get(ctx,
-				chroma.WithWhere(chroma.EqString("source", path)))
-
-			if err == nil {
-				resultIDs := allChunks.GetIDs()
-				resultDocs := allChunks.GetDocuments()
-				for i := range resultIDs {
-					if i < len(resultDocs) {
-						corpus = append(corpus, BM25Doc{
-							ID:   string(resultIDs[i]),
-							Text: resultDocs[i].ContentString(),
-						})
-						documentChunks++
-					}
-				}
-			}
-			return nil
-		}
-
 		chunks := chunkText(text, chunkSize)
 		if len(chunks) == 0 {
 			return nil
 		}
 
+		canonicalPath := filepath.Clean(path)
+		if absPath, err := filepath.Abs(canonicalPath); err == nil {
+			canonicalPath = absPath
+		}
+		sourcePath := canonicalPath
+		shouldReindex := true
+
+		firstChunkIDCanonical := stableID("rag", canonicalPath, "0")
+		existingDocs, err := ragDocsCollection.Get(ctx, chroma.WithIDs(
+			chroma.DocumentID(firstChunkIDCanonical),
+		))
+		if err == nil && existingDocs.Count() > 0 {
+			shouldReindex = false
+
+			// If source metadata lookup is stale/missing, force reindex to repair.
+			allChunks, getErr := ragDocsCollection.Get(ctx,
+				chroma.WithWhere(chroma.EqString("source", sourcePath)))
+			if getErr != nil || allChunks.Count() == 0 {
+				log.Printf("Document %s index appears stale; reindexing", filepath.Base(path))
+				shouldReindex = true
+			} else {
+				log.Printf("Document %s already indexed, skipping embed/upsert", filepath.Base(path))
+			}
+		}
+
 		embedInputs := make([]Chunk, 0, len(chunks))
 		for i, c := range chunks {
-			id := stableID("rag", path, fmt.Sprintf("%d", i))
+			id := stableID("rag", canonicalPath, fmt.Sprintf("%d", i))
 			embedInputs = append(embedInputs, Chunk{ID: id, Text: c})
+			corpus = append(corpus, BM25Doc{ID: id, Text: c})
+			bm25Chunks++
+		}
+		if !shouldReindex {
+			return nil
 		}
 
 		// Strategy 2: Use cached embeddings to avoid redundant API calls
@@ -126,7 +127,7 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 			id := embedInputs[i].ID
 			vec := vecs[id]
 			meta := map[string]interface{}{
-				"source": path,
+				"source": sourcePath,
 				"type":   "document",
 				"chunk":  i,
 			}
@@ -134,9 +135,7 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 				log.Printf("Warning: upsert failed for %s chunk %d: %v", path, i, err)
 				continue
 			}
-			documentChunks++
-
-			corpus = append(corpus, BM25Doc{ID: id, Text: c})
+			upsertedChunks++
 		}
 
 		return nil
@@ -145,8 +144,11 @@ func loadDocumentsFromDataDir(ctx context.Context) error {
 		return err
 	}
 
-	if documentChunks > 0 {
-		log.Printf("Indexed %d chunks from %s", documentChunks, dataDir)
+	if bm25Chunks > 0 {
+		log.Printf("Loaded %d chunks into BM25 corpus from %s", bm25Chunks, dataDir)
+	}
+	if upsertedChunks > 0 {
+		log.Printf("Upserted %d chunks into ChromaDB from %s", upsertedChunks, dataDir)
 	}
 
 	// Build BM25 corpus for hybrid retrieval
